@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Теннис с препятствиями</title>
+    <title>Теннис с круглыми препятствиями</title>
     <style>
         body {
             margin: 0;
@@ -50,26 +50,28 @@
     let gameStarted = false;
     let countdown = 5;
 
-    // Препятствия
+    // Препятствия (круги)
     const obstacles = [];
     const numObstacles = 5;
 
-    // Генерация препятствий
+    // Генерация кругов-препятствий
     function generateObstacles() {
         for (let i = 0; i < numObstacles; i++) {
-            const obstacleWidth = 50;
-            const obstacleHeight = 10;
-            const x = Math.random() * (canvas.width - obstacleWidth);
-            const y = Math.random() * (canvas.height - 100);  // Избегаем области ракеток
-            obstacles.push({ x, y, width: obstacleWidth, height: obstacleHeight });
+            const radius = Math.random() * 20 + 15; // Радиус от 15 до 35
+            const x = Math.random() * (canvas.width - radius * 2) + radius;
+            const y = Math.random() * (canvas.height - radius * 2 - 100) + radius; // Избегаем области ракеток
+            obstacles.push({ x, y, radius });
         }
     }
 
-    // Рисуем препятствия
+    // Рисуем препятствия (круги)
     function drawObstacles() {
         ctx.fillStyle = "#ffff00"; // Цвет препятствий
         obstacles.forEach(obstacle => {
-            ctx.fillRect(obstacle.x, obstacle.y, obstacle.width, obstacle.height);
+            ctx.beginPath();
+            ctx.arc(obstacle.x, obstacle.y, obstacle.radius, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.closePath();
         });
     }
 
@@ -144,13 +146,16 @@
                 ballSpeedY *= 1.05;
             }
 
-            // Проверка на попадание мяча в препятствия
+            // Проверка на попадание мяча в препятствия (круги)
             obstacles.forEach(obstacle => {
-                if (ballX + ballRadius > obstacle.x && ballX - ballRadius < obstacle.x + obstacle.width &&
-                    ballY + ballRadius > obstacle.y && ballY - ballRadius < obstacle.y + obstacle.height) {
+                const dx = ballX - obstacle.x;
+                const dy = ballY - obstacle.y;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+
+                if (distance < ballRadius + obstacle.radius) {
                     // Отскок мяча от препятствия
                     ballSpeedY = -ballSpeedY;
-                    ballSpeedX = (ballX < obstacle.x + obstacle.width / 2) ? Math.abs(ballSpeedX) : -Math.abs(ballSpeedX);
+                    ballSpeedX = (ballX < obstacle.x) ? Math.abs(ballSpeedX) : -Math.abs(ballSpeedX);
                 }
             });
 
@@ -209,7 +214,7 @@
         requestAnimationFrame(gameLoop);
     }
 
-    // Генерация препятствий
+    // Генерация кругов-препятствий
     generateObstacles();
 
     // Запуск игры
