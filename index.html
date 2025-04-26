@@ -48,7 +48,7 @@
     let aiSpeed = 4;
 
     let gameStarted = false;
-    let countdown = 5;
+    let countdown = 5; // Начальный отсчёт
 
     // Управление игроком
     document.addEventListener("keydown", (event) => {
@@ -65,11 +65,11 @@
         }
     });
 
-    // Функция рисования мячаи
+    // Функция рисования мяча
     function drawBall() {
         ctx.beginPath();
         ctx.arc(ballX, ballY, ballRadius, 0, Math.PI * 2);
-        ctx.fillStyle = "#00ff00"; // Цвет мячаz
+        ctx.fillStyle = "#00ff00"; // Цвет мяча
         ctx.fill();
         ctx.closePath();
     }
@@ -142,16 +142,21 @@
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             ctx.font = "40px Arial";
             ctx.fillStyle = "#fff";
-            ctx.fillText(`Начнется через ${countdown}`, canvas.width / 2 - 150, canvas.height / 2);
-
             if (countdown > 0) {
-                countdown--;
+                ctx.fillText(`Начнется через ${countdown}`, canvas.width / 2 - 150, canvas.height / 2);
             } else {
                 gameStarted = true; // Игра начинается
-                countdown = 5; // Сбрасываем счётчик, если нужно перезапустить игру
+                countdown = 5; // Сбрасываем отсчёт на случай перезапуска
             }
         }
     }
+
+    // Таймер отсчёта, обновляем каждую секунду
+    setInterval(function() {
+        if (countdown > 0) {
+            countdown--;
+        }
+    }, 1000); // Обновляем раз в секунду (1000 миллисекунд)
 
     // Функция, которая будет запускаться каждый кадр
     function gameLoop() {
