@@ -1,224 +1,174 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Теннис с круглыми препятствиями</title>
-    <style>
-        body {
-            margin: 0;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            background-color: #2f2f2f;
-        }
-
-        canvas {
-            background-color: black;
-        }
-    </style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Теннис с круглыми препятствиями</title>
+  <style>
+    body { margin: 0; display: flex; justify-content: center; align-items: center; height:100vh; background:#222; }
+    canvas { background: #000; }
+  </style>
 </head>
 <body>
 <canvas id="gameCanvas" width="800" height="400"></canvas>
-
 <script>
-    // Получаем элемент canvas и контекст рисования
-    const canvas = document.getElementById("gameCanvas");
-    const ctx = canvas.getContext("2d");
+  const canvas = document.getElementById("gameCanvas"),
+        ctx    = canvas.getContext("2d");
 
-    // Размеры мяча
-    const ballRadius = 10;
+  // Параметры мяча и ракеток
+  const ballRadius    = 10;
+  const paddleWidth   = 100;
+  const paddleHeight  = 10;
 
-    // Размеры ракеток
-    const paddleWidth = 100;
-    const paddleHeight = 10;
+  // Игровые переменные
+  let ballX = canvas.width/2,
+      ballY = canvas.height/2,
+      ballVX = 2,
+      ballVY = 2;
 
-    // Позиции и скорости
-    let ballX = canvas.width / 2;
-    let ballY = canvas.height / 2;
-    let ballSpeedX = 2;
-    let ballSpeedY = 2;
+  let playerX = (canvas.width-paddleWidth)/2,
+      playerSpeed = 0;
 
-    let playerPaddleX = (canvas.width - paddleWidth) / 2;
-    let playerPaddleY = canvas.height - paddleHeight - 20;
-    let playerSpeed = 0;
+  let aiX = (canvas.width-paddleWidth)/2,
+      aiSpeed = 6;
 
-    let aiPaddleX = (canvas.width - paddleWidth) / 2;
-    let aiSpeed = 6;
+  let countdown = 5,
+      gameStarted = false;
 
-    let gameStarted = false;
-    let countdown = 5;
+  // Круглые препятствия (расставлены «красиво»)
+  const obstacles = [
+    { x: 200, y: 150, r: 25 },
+    { x: 400, y: 100, r: 35 },
+    { x: 600, y: 180, r: 30 },
+    { x: 300, y: 300, r: 20 },
+    { x: 500, y: 260, r: 28 },
+  ];
 
-    // Препятствия (круги)
-    const obstacles = [];
-    const numObstacles = 5;
+  // Управление стрелками
+  document.addEventListener("keydown", e=>{
+    if(e.key === "ArrowLeft")  playerSpeed = -8;
+    if(e.key === "ArrowRight") playerSpeed =  8;
+  });
+  document.addEventListener("keyup", e=>{
+    if(e.key==="ArrowLeft"||e.key==="ArrowRight") playerSpeed = 0;
+  });
 
-    // Генерация кругов-препятствий
-    function generateObstacles() {
-        for (let i = 0; i < numObstacles; i++) {
-            const radius = Math.random() * 20 + 15; // Радиус от 15 до 35
-            const x = Math.random() * (canvas.width - radius * 2) + radius;
-            const y = Math.random() * (canvas.height - radius * 2 - 100) + radius; // Избегаем области ракеток
-            obstacles.push({ x, y, radius });
-        }
-    }
-
-    // Рисуем препятствия (круги)
-    function drawObstacles() {
-        ctx.fillStyle = "#ffff00"; // Цвет препятствий
-        obstacles.forEach(obstacle => {
-            ctx.beginPath();
-            ctx.arc(obstacle.x, obstacle.y, obstacle.radius, 0, Math.PI * 2);
-            ctx.fill();
-            ctx.closePath();
-        });
-    }
-
-    // Управление игроком
-    document.addEventListener("keydown", (event) => {
-        if (event.key === "ArrowLeft") {
-            playerSpeed = -8;
-        } else if (event.key === "ArrowRight") {
-            playerSpeed = 8;
-        }
+  // Рисовалки
+  function drawBall(){
+    ctx.beginPath();
+    ctx.arc(ballX, ballY, ballRadius, 0,Math.PI*2);
+    ctx.fillStyle="#0f0"; ctx.fill(); ctx.closePath();
+  }
+  function drawPaddles(){
+    // Игрок
+    ctx.fillStyle="#f00";
+    ctx.fillRect(playerX, canvas.height-20, paddleWidth, paddleHeight);
+    // ИИ
+    ctx.fillStyle="#00f";
+    ctx.fillRect(aiX, 10, paddleWidth, paddleHeight);
+  }
+  function drawObstacles(){
+    ctx.fillStyle="#ff0";
+    obstacles.forEach(c=>{
+      ctx.beginPath();
+      ctx.arc(c.x, c.y, c.r, 0, Math.PI*2);
+      ctx.fill(); ctx.closePath();
     });
+  }
+  function drawCountdown(){
+    ctx.fillStyle="#fff";
+    ctx.font="40px sans-serif";
+    ctx.fillText(`Начнётся через ${countdown}`, canvas.width/2-150, canvas.height/2);
+  }
 
-    document.addEventListener("keyup", (event) => {
-        if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
-            playerSpeed = 0;
-        }
-    });
+  // Отскок мяча от круга по нормали
+  function handleCircleCollision(circle){
+    const dx = ballX - circle.x;
+    const dy = ballY - circle.y;
+    const dist = Math.hypot(dx, dy);
+    if(dist < ballRadius + circle.r){
+      // нормаль
+      const nx = dx / dist;
+      const ny = dy / dist;
+      // скорость по нормали
+      const vDotN = ballVX * nx + ballVY * ny;
+      // отражённая скорость
+      ballVX -= 2 * vDotN * nx;
+      ballVY -= 2 * vDotN * ny;
+      // небольшой перенос, чтобы не «влипать»
+      const overlap = ballRadius + circle.r - dist;
+      ballX += nx * overlap;
+      ballY += ny * overlap;
+    }
+  }
 
-    // Функция рисования мяча
-    function drawBall() {
-        ctx.beginPath();
-        ctx.arc(ballX, ballY, ballRadius, 0, Math.PI * 2);
-        ctx.fillStyle = "#00ff00"; // Цвет мяча
-        ctx.fill();
-        ctx.closePath();
+  function update(){
+    if(!gameStarted) return;
+
+    // движение мяча
+    ballX += ballVX;
+    ballY += ballVY;
+
+    // от стен
+    if(ballX<ballRadius||ballX>canvas.width-ballRadius) ballVX*=-1;
+    if(ballY<ballRadius) ballVY*=-1;
+
+    // от ракеток
+    if(ballY>canvas.height-20-ballRadius &&
+       ballX>playerX && ballX<playerX+paddleWidth){
+      ballVY = -Math.abs(ballVY);
+      ballVX *= 1.05; ballVY *= 1.05;
+    }
+    if(ballY<20+ballRadius &&
+       ballX>aiX && ballX<aiX+paddleWidth){
+      ballVY = Math.abs(ballVY);
+      ballVX *= 1.05; ballVY *= 1.05;
     }
 
-    // Функция рисования ракетки игрока
-    function drawPlayerPaddle() {
-        ctx.beginPath();
-        ctx.rect(playerPaddleX, playerPaddleY, paddleWidth, paddleHeight);
-        ctx.fillStyle = "#ff0000"; // Цвет ракетки игрока
-        ctx.fill();
-        ctx.closePath();
+    // от кругов
+    obstacles.forEach(handleCircleCollision);
+
+    // падение
+    if(ballY>canvas.height+ballRadius){
+      alert("Проиграли!");
+      location.reload();
     }
 
-    // Функция рисования ракетки ИИ
-    function drawAiPaddle() {
-        ctx.beginPath();
-        ctx.rect(aiPaddleX, 20, paddleWidth, paddleHeight);
-        ctx.fillStyle = "#0000ff"; // Цвет ракетки ИИ
-        ctx.fill();
-        ctx.closePath();
+    // движение игрока
+    playerX += playerSpeed;
+    playerX = Math.max(0, Math.min(playerX, canvas.width-paddleWidth));
+
+    // простой ИИ: следует за мячом
+    if(ballX < aiX + paddleWidth/2) aiX -= aiSpeed;
+    else aiX += aiSpeed;
+    aiX = Math.max(0, Math.min(aiX, canvas.width-paddleWidth));
+  }
+
+  function loop(){
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+
+    if(!gameStarted){
+      drawObstacles();
+      drawPaddles();
+      drawBall();
+      drawCountdown();
+    } else {
+      update();
+      drawObstacles();
+      drawPaddles();
+      drawBall();
     }
 
-    // Функция для обновления игры
-    function updateGame() {
-        if (gameStarted) {
-            // Двигаем мяч
-            ballX += ballSpeedX;
-            ballY += ballSpeedY;
+    requestAnimationFrame(loop);
+  }
 
-            // Отражение мяча от стен
-            if (ballX + ballRadius > canvas.width || ballX - ballRadius < 0) {
-                ballSpeedX = -ballSpeedX;
-            }
-            if (ballY - ballRadius < 0) {
-                ballSpeedY = -ballSpeedY;
-            }
+  // Запуск отсчёта и цикла
+  const timer = setInterval(()=>{
+    if(countdown>0) countdown--;
+    else { gameStarted=true; clearInterval(timer); }
+  }, 1000);
 
-            // Проверка на попадание мяча в ракетку игрока
-            if (ballY + ballRadius > playerPaddleY && ballY + ballRadius < playerPaddleY + paddleHeight && ballX > playerPaddleX && ballX < playerPaddleX + paddleWidth) {
-                ballSpeedY = -ballSpeedY;
-                ballSpeedX *= 1.05; // Увеличиваем скорость мяча
-                ballSpeedY *= 1.05;
-            }
-
-            // Проверка на попадание мяча в ракетку ИИ
-            if (ballY - ballRadius < 40 && ballY - ballRadius > 40 - paddleHeight && ballX > aiPaddleX && ballX < aiPaddleX + paddleWidth) {
-                ballSpeedY = -ballSpeedY;
-                ballSpeedX *= 1.05; // Увеличиваем скорость мяча
-                ballSpeedY *= 1.05;
-            }
-
-            // Проверка на попадание мяча в препятствия (круги)
-            obstacles.forEach(obstacle => {
-                const dx = ballX - obstacle.x;
-                const dy = ballY - obstacle.y;
-                const distance = Math.sqrt(dx * dx + dy * dy);
-
-                if (distance < ballRadius + obstacle.radius) {
-                    // Отскок мяча от препятствия
-                    ballSpeedY = -ballSpeedY;
-                    ballSpeedX = (ballX < obstacle.x) ? Math.abs(ballSpeedX) : -Math.abs(ballSpeedX);
-                }
-            });
-
-            // Падение мяча (игрок проиграл)
-            if (ballY + ballRadius > canvas.height) {
-                alert("Вы проиграли! Попробуйте снова!");
-                document.location.reload();
-            }
-
-            // Управление ракеткой игрока
-            playerPaddleX += playerSpeed;
-            if (playerPaddleX < 0) playerPaddleX = 0;
-            if (playerPaddleX + paddleWidth > canvas.width) playerPaddleX = canvas.width - paddleWidth;
-
-            // Ракетка ИИ — движется за мячом
-            if (ballX < aiPaddleX + paddleWidth / 2) {
-                aiPaddleX -= aiSpeed;
-            } else if (ballX > aiPaddleX + paddleWidth / 2) {
-                aiPaddleX += aiSpeed;
-            }
-
-            // Ограничиваем движение ИИ в пределах экрана
-            if (aiPaddleX < 0) aiPaddleX = 0;
-            if (aiPaddleX + paddleWidth > canvas.width) aiPaddleX = canvas.width - paddleWidth;
-
-            // Рисуем все элементы
-            drawBall();
-            drawPlayerPaddle();
-            drawAiPaddle();
-            drawObstacles();
-        } else {
-            // Показываем отсчёт перед началом игры
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            ctx.font = "40px Arial";
-            ctx.fillStyle = "#fff";
-            if (countdown > 0) {
-                ctx.fillText(`Начнется через ${countdown}`, canvas.width / 2 - 150, canvas.height / 2);
-            } else {
-                gameStarted = true;
-                countdown = 5;
-            }
-        }
-    }
-
-    // Таймер отсчёта
-    setInterval(function() {
-        if (countdown > 0) {
-            countdown--;
-        }
-    }, 1000);
-
-    // Функция, которая будет запускаться каждый кадр
-    function gameLoop() {
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        updateGame();
-        requestAnimationFrame(gameLoop);
-    }
-
-    // Генерация кругов-препятствий
-    generateObstacles();
-
-    // Запуск игры
-    gameLoop();
+  loop();
 </script>
 </body>
 </html>
