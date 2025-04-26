@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Теннис</title>
+    <title>Теннис с препятствиями</title>
     <style>
         body {
             margin: 0;
@@ -37,7 +37,7 @@
     // Позиции и скорости
     let ballX = canvas.width / 2;
     let ballY = canvas.height / 2;
-    let ballSpeedX = 2; // Меньше скорость мяча
+    let ballSpeedX = 2;
     let ballSpeedY = 2;
 
     let playerPaddleX = (canvas.width - paddleWidth) / 2;
@@ -45,10 +45,33 @@
     let playerSpeed = 0;
 
     let aiPaddleX = (canvas.width - paddleWidth) / 2;
-    let aiSpeed = 6; // Увеличиваем скорость ИИ
+    let aiSpeed = 6;
 
     let gameStarted = false;
-    let countdown = 5; // Начальный отсчёт
+    let countdown = 5;
+
+    // Препятствия
+    const obstacles = [];
+    const numObstacles = 5;
+
+    // Генерация препятствий
+    function generateObstacles() {
+        for (let i = 0; i < numObstacles; i++) {
+            const obstacleWidth = 50;
+            const obstacleHeight = 10;
+            const x = Math.random() * (canvas.width - obstacleWidth);
+            const y = Math.random() * (canvas.height - 100);  // Избегаем области ракеток
+            obstacles.push({ x, y, width: obstacleWidth, height: obstacleHeight });
+        }
+    }
+
+    // Рисуем препятствия
+    function drawObstacles() {
+        ctx.fillStyle = "#ffff00"; // Цвет препятствий
+        obstacles.forEach(obstacle => {
+            ctx.fillRect(obstacle.x, obstacle.y, obstacle.width, obstacle.height);
+        });
+    }
 
     // Управление игроком
     document.addEventListener("keydown", (event) => {
@@ -110,12 +133,26 @@
             // Проверка на попадание мяча в ракетку игрока
             if (ballY + ballRadius > playerPaddleY && ballY + ballRadius < playerPaddleY + paddleHeight && ballX > playerPaddleX && ballX < playerPaddleX + paddleWidth) {
                 ballSpeedY = -ballSpeedY;
+                ballSpeedX *= 1.05; // Увеличиваем скорость мяча
+                ballSpeedY *= 1.05;
             }
 
             // Проверка на попадание мяча в ракетку ИИ
             if (ballY - ballRadius < 40 && ballY - ballRadius > 40 - paddleHeight && ballX > aiPaddleX && ballX < aiPaddleX + paddleWidth) {
                 ballSpeedY = -ballSpeedY;
+                ballSpeedX *= 1.05; // Увеличиваем скорость мяча
+                ballSpeedY *= 1.05;
             }
+
+            // Проверка на попадание мяча в препятствия
+            obstacles.forEach(obstacle => {
+                if (ballX + ballRadius > obstacle.x && ballX - ballRadius < obstacle.x + obstacle.width &&
+                    ballY + ballRadius > obstacle.y && ballY - ballRadius < obstacle.y + obstacle.height) {
+                    // Отскок мяча от препятствия
+                    ballSpeedY = -ballSpeedY;
+                    ballSpeedX = (ballX < obstacle.x + obstacle.width / 2) ? Math.abs(ballSpeedX) : -Math.abs(ballSpeedX);
+                }
+            });
 
             // Падение мяча (игрок проиграл)
             if (ballY + ballRadius > canvas.height) {
@@ -139,10 +176,11 @@
             if (aiPaddleX < 0) aiPaddleX = 0;
             if (aiPaddleX + paddleWidth > canvas.width) aiPaddleX = canvas.width - paddleWidth;
 
-            // Двигаем мяч
+            // Рисуем все элементы
             drawBall();
             drawPlayerPaddle();
             drawAiPaddle();
+            drawObstacles();
         } else {
             // Показываем отсчёт перед началом игры
             ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -151,25 +189,28 @@
             if (countdown > 0) {
                 ctx.fillText(`Начнется через ${countdown}`, canvas.width / 2 - 150, canvas.height / 2);
             } else {
-                gameStarted = true; // Игра начинается
-                countdown = 5; // Сбрасываем отсчёт на случай перезапуска
+                gameStarted = true;
+                countdown = 5;
             }
         }
     }
 
-    // Таймер отсчёта, обновляем каждую секунду
+    // Таймер отсчёта
     setInterval(function() {
         if (countdown > 0) {
             countdown--;
         }
-    }, 1000); // Обновляем раз в секунду (1000 миллисекунд)
+    }, 1000);
 
     // Функция, которая будет запускаться каждый кадр
     function gameLoop() {
-        ctx.clearRect(0, 0, canvas.width, canvas.height); // Очищаем экран
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
         updateGame();
-        requestAnimationFrame(gameLoop); // Следующий кадр
+        requestAnimationFrame(gameLoop);
     }
+
+    // Генерация препятствий
+    generateObstacles();
 
     // Запуск игры
     gameLoop();
