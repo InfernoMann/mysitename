@@ -50,12 +50,12 @@
   ];
 
   // Управление стрелками
-  document.addEventListener("keydown", e=>{
-    if(e.key === "ArrowLeft")  playerSpeed = -8;
-    if(e.key === "ArrowRight") playerSpeed = 8;
+  document.addEventListener("keydown", e => {
+    if (e.key === "ArrowLeft") playerSpeed = -8;
+    if (e.key === "ArrowRight") playerSpeed = 8;
   });
-  document.addEventListener("keyup", e=>{
-    if(e.key==="ArrowLeft"||e.key==="ArrowRight") playerSpeed = 0;
+  document.addEventListener("keyup", e => {
+    if (e.key === "ArrowLeft" || e.key === "ArrowRight") playerSpeed = 0;
   });
 
   // Рисовалки
@@ -180,7 +180,6 @@
       ballVY = 2;
       countdown = 5;
       gameStarted = false;
-      roundOver = false;
     }, 1000);
   }
 
@@ -201,6 +200,13 @@
     }
 
     drawScore();
+
+    // Если раунд завершен, перезапускаем игру
+    if (roundOver) {
+      roundOver = false;
+      gameStarted = false;  // не стартуем игру, пока не завершится отсчёт
+      countdown = 5;
+    }
 
     requestAnimationFrame(loop);
   }
