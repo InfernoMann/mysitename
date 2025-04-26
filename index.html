@@ -204,8 +204,8 @@
     // Если раунд завершен, перезапускаем игру
     if (roundOver) {
       roundOver = false;
-      gameStarted = false;  // не стартуем игру, пока не завершится отсчёт
-      countdown = 5;
+      countdown = 5; // Сбросим таймер, чтобы новый раунд начался
+      gameStarted = false;  // Игра еще не началась, ждем таймер отсчета
     }
 
     requestAnimationFrame(loop);
