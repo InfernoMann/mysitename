@@ -1,0 +1,2 @@
+# mysitename
+ez
