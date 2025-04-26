@@ -30,7 +30,7 @@
       playerSpeed = 0;
 
   let aiX = (canvas.width - paddleWidth) / 2,
-      aiSpeed = 6;
+      aiSpeed = 5; // ИИ будет двигаться быстрее
 
   let countdown = 5,
       gameStarted = false;
@@ -165,10 +165,19 @@
     playerX += playerSpeed;
     playerX = Math.max(0, Math.min(playerX, canvas.width - paddleWidth));
 
-    // простой ИИ: следует за мячом
-    if (ballX < aiX + paddleWidth / 2) aiX -= aiSpeed;
-    else aiX += aiSpeed;
-    aiX = Math.max(0, Math.min(aiX, canvas.width - paddleWidth));
+    // ИИ: движение зависит от положения мяча
+    if (ballX < aiX + paddleWidth / 2) aiX -= aiSpeed; // движется влево
+    else aiX += aiSpeed; // движется вправо
+    aiX = Math.max(0, Math.min(aiX, canvas.width - paddleWidth)); // ограничение
+
+    // Если ИИ пропускает мяч, он должен активно двигаться
+    if (ballY < 20 + ballRadius) {
+      if (ballX < aiX) {
+        aiX -= aiSpeed; // движется влево, если мяч слева
+      } else {
+        aiX += aiSpeed; // движется вправо, если мяч справа
+      }
+    }
   }
 
   // Функция сброса раунда
