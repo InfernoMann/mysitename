@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<title>Поезд едет!</title>
+<style>
+  body {
+    background-color: #87CEEB; /* Голубое небо */
+    overflow: hidden;
+    margin: 0;
+    height: 100vh;
+  }
+  .train {
+    width: 200px;
+    height: 100px;
+    background: red;
+    border: 5px solid black;
+    border-radius: 10px;
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    animation: moveTrain 8s linear infinite;
+  }
+
+  @keyframes moveTrain {
+    0% {
+      left: -220px;
+    }
+    100% {
+      left: 100%;
+    }
+  }
+</style>
+</head>
+<body>
+
+<div class="train"></div>
+
+</body>
+</html>
