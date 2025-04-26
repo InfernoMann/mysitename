@@ -2,7 +2,7 @@
 <html lang="ru">
 <head>
 <meta charset="UTF-8">
-<title>Поезд едет!</title>
+<title>Реальный поезд едет!</title>
 <style>
   body {
     background-color: #87CEEB; /* Голубое небо */
@@ -11,11 +11,10 @@
     height: 100vh;
   }
   .train {
-    width: 200px;
-    height: 100px;
-    background: red;
-    border: 5px solid black;
-    border-radius: 10px;
+    width: 300px; /* Устанавливаем ширину поезда */
+    height: 150px; /* Устанавливаем высоту */
+    background-image: url('https://upload.wikimedia.org/wikipedia/commons/3/3e/EuroCity_train.jpg'); /* Ссылка на изображение поезда */
+    background-size: cover;
     position: absolute;
     top: 50%;
     transform: translateY(-50%);
@@ -24,7 +23,7 @@
 
   @keyframes moveTrain {
     0% {
-      left: -220px;
+      left: -350px;
     }
     100% {
       left: 100%;
