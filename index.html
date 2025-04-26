@@ -45,7 +45,7 @@
     let playerSpeed = 0;
 
     let aiPaddleX = (canvas.width - paddleWidth) / 2;
-    let aiSpeed = 4;
+    let aiSpeed = 6; // Увеличиваем скорость ИИ
 
     let gameStarted = false;
     let countdown = 5; // Начальный отсчёт
@@ -128,8 +128,14 @@
             if (playerPaddleX < 0) playerPaddleX = 0;
             if (playerPaddleX + paddleWidth > canvas.width) playerPaddleX = canvas.width - paddleWidth;
 
-            // Ракетка ИИ (управляется автоматически)
-            aiPaddleX += aiSpeed;
+            // Ракетка ИИ — движется за мячом
+            if (ballX < aiPaddleX + paddleWidth / 2) {
+                aiPaddleX -= aiSpeed;
+            } else if (ballX > aiPaddleX + paddleWidth / 2) {
+                aiPaddleX += aiSpeed;
+            }
+
+            // Ограничиваем движение ИИ в пределах экрана
             if (aiPaddleX < 0) aiPaddleX = 0;
             if (aiPaddleX + paddleWidth > canvas.width) aiPaddleX = canvas.width - paddleWidth;
 
