@@ -2,252 +2,339 @@
 <html lang="ru">
 <head>
   <meta charset="UTF-8">
-  <title>Snake 300 Lines</title>
+  <title>Необычный Mario</title>
   <style>
-    /* --- Сброс стилей --- */
+    /* --- Сброс стилей и базовые настройки --- */
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    html, body { height: 100%; }
-    body {
-      display: flex;
-      background: #111;
-      color: #eee;
-      font-family: "Segoe UI", sans-serif;
-      user-select: none;
-      overflow: hidden;
-      align-items: center;
-      justify-content: center;
-    }
-    canvas {
-      background: #222;
-      border: 4px solid #444;
-      image-rendering: pixelated;
-    }
-    .overlay {
-      position: absolute;
-      top: 0; left: 0;
-      width: 100%; height: 100%;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      pointer-events: none;
-      font-size: 24px;
-      text-align: center;
-    }
-    .overlay.hidden { display: none; }
-    .overlay .line { margin: 8px 0; }
+    html, body { height: 100%; overflow: hidden; }
+    body { background: #87CEEB; font-family: sans-serif; position: relative; }
+    canvas { background: transparent; display: block; margin: 0 auto; }
+    #ui { position: absolute; top: 10px; left: 50%; transform: translateX(-50%); color: #fff; font-size: 18px; text-shadow: 1px 1px 2px #000; }
+    .fade { transition: opacity 0.5s; }
+    .hidden { opacity: 0; pointer-events: none; }
+    /* --- Меню и оверлей --- */
+    #menu { position: absolute; width: 100%; height: 100%; background: rgba(0,0,0,0.7); display: flex; flex-direction: column; align-items: center; justify-content: center; color: #fff; }
+    #menu h1 { font-size: 48px; margin-bottom: 20px; }
+    #menu button { padding: 10px 20px; font-size: 20px; margin: 5px; cursor: pointer; border: none; border-radius: 5px; }
+    #menu button:hover { background: rgba(255,255,255,0.2); }
   </style>
 </head>
 <body>
-  <canvas id="game" width="400" height="400"></canvas>
-  <div id="overlay" class="overlay">
-    <div id="titleScreen">
-      <div class="line">🐍 Змейка</div>
-      <div class="line">Нажмите ENTER, чтобы начать</div>
-      <div class="line small">↑↓←→ или WASD</div>
-    </div>
-    <div id="pauseScreen" class="hidden">
-      <div class="line">⏸ Пауза</div>
-      <div class="line">Нажмите P, чтобы продолжить</div>
-    </div>
-    <div id="gameOverScreen" class="hidden">
-      <div class="line" id="gameOverText">Игра окончена</div>
-      <div class="line" id="scoreText">Счёт: 0</div>
-      <div class="line">Нажмите ENTER, чтобы играть снова</div>
+  <canvas id="gameCanvas" width="960" height="540"></canvas>
+  <div id="ui">Score: 0 | Lives: 3 | Level: 1</div>
+  <div id="menu">
+    <h1>Необычный Mario</h1>
+    <button id="startBtn">Начать игру</button>
+    <button id="instructionsBtn">Инструкции</button>
+    <div id="instructions" class="hidden fade">
+      <p>Стрелки — движение</p>
+      <p>Пробел — прыжок</p>
+      <p>Ctrl — бросок огненного шара (после бонуса)</p>
+      <button id="backBtn">Назад</button>
     </div>
   </div>
-
   <script>
-  // ==== ПЕРЕМЕННЫЕ ====
-  const canvas = document.getElementById('game');
-  const ctx    = canvas.getContext('2d');
-  const overlay= document.getElementById('overlay');
-  const titleS = document.getElementById('titleScreen');
-  const pauseS = document.getElementById('pauseScreen');
-  const overS  = document.getElementById('gameOverScreen');
-  const scoreT = document.getElementById('scoreText');
-  const gameOverT = document.getElementById('gameOverText');
+    // =========================================
+    // == Необычный Mario Platformer (~500 строк)
+    // =========================================
 
-  // Параметры сетки
-  const TILE = 20;
-  const COLS = canvas.width / TILE;
-  const ROWS = canvas.height / TILE;
+    // --- Константы ---
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    const UI = document.getElementById('ui');
+    const menu = document.getElementById('menu');
+    const startBtn = document.getElementById('startBtn');
+    const instrBtn = document.getElementById('instructionsBtn');
+    const backBtn = document.getElementById('backBtn');
+    const instructions = document.getElementById('instructions');
 
-  // Игровые состояния
-  const STATE = { TITLE:0, PLAY:1, PAUSE:2, OVER:3 };
-  let state = STATE.TITLE;
+    const GRAVITY = 0.6;
+    const FRICTION = 0.8;
+    const TILE = 32;
+    const ROWS = 17;
+    const COLS = 30;
 
-  // Змейка
-  let snake, dir, nextDir, food, score, speed, highScore;
+    const STATE = { MENU: 0, PLAY:1, PAUSE:2, OVER:3 };
+    let gameState = STATE.MENU;
 
-  // ==== ИНИЦИАЛИЗАЦИЯ ====
-  function init() {
-    snake = [{ x: Math.floor(COLS/2), y: Math.floor(ROWS/2) }];
-    dir = { x:0, y:0 };
-    nextDir = dir;
-    placeFood();
-    score = 0;
-    speed = 8; // кадров в секунду
-    highScore = parseInt(localStorage.getItem('snakeHigh')) || 0;
-    showScreen(STATE.TITLE);
-  }
+    let keys = {}, touches = {}, lastTouch = null;
+    let score = 0, lives = 3, level = 1;
+    let player, camera, levelData, enemies = [], coins = [], projectiles = [];
+    let bgLayers = [], parallaxSpeeds = [];
 
-  // ==== ФУНКЦИИ ЭКРАНОВ ====
-  function showScreen(s) {
-    state = s;
-    titleS.classList.toggle('hidden', s !== STATE.TITLE);
-    pauseS.classList.toggle('hidden', s !== STATE.PAUSE);
-    overS.classList.toggle('hidden', s !== STATE.OVER);
-    overlay.classList.toggle('hidden', s === STATE.PLAY);
-  }
+    // --- Загрузка изображений ---
+    const imageFiles = {
+      'tiles': 'tiles.png',  // тайл-спрайт карта
+      'mario': 'mario.png',  // спрайт игрока
+      'goomba': 'goomba.png',// враг
+      'fireball': 'fireball.png',
+      'coins': 'coins.png',
+      'bg1':'bg_layer1.png', 'bg2':'bg_layer2.png', 'bg3':'bg_layer3.png'
+    };
+    const images = {};
 
-  // ==== РАЗМЕСТИТЬ ЕДУ ====
-  function placeFood() {
-    let ok = false;
-    while (!ok) {
-      food = { x: Math.floor(Math.random()*COLS), y: Math.floor(Math.random()*ROWS) };
-      ok = !snake.some(p=>p.x===food.x && p.y===food.y);
-    }
-  }
-
-  // ==== ОБНОВЛЕНИЕ ИГРЫ ====
-  function update() {
-    // Изменяем направление
-    dir = nextDir;
-    // Новая голова
-    let head = { x: snake[0].x + dir.x, y: snake[0].y + dir.y };
-
-    // Обёртка по краям
-    if (head.x < 0) head.x = COLS - 1;
-    if (head.x >= COLS) head.x = 0;
-    if (head.y < 0) head.y = ROWS - 1;
-    if (head.y >= ROWS) head.y = 0;
-
-    // Проверка столкновения с собой (пропускаем index 0)
-    for (let i = 1; i < snake.length; i++) {
-      if (snake[i].x === head.x && snake[i].y === head.y) {
-        gameOver();
-        return;
+    function loadImages(callback) {
+      let loaded = 0, total = Object.keys(imageFiles).length;
+      for (let key in imageFiles) {
+        images[key] = new Image();
+        images[key].src = imageFiles[key];
+        images[key].onload = () => {
+          loaded++;
+          if (loaded === total) callback();
+        };
       }
     }
 
-    // Вставляем голову
-    snake.unshift(head);
-
-    // Если съели еду
-    if (head.x === food.x && head.y === food.y) {
-      score++;
-      if (score % 5 === 0) speed += 1; // ускоряем каждые 5 очков
-      placeFood();
-    } else {
-      snake.pop();
+    // --- Классы игровых объектов ---
+    class GameObject {
+      constructor(x,y,w,h) {
+        this.x = x; this.y = y;
+        this.width = w; this.height = h;
+      }
+      draw() {/* override */}
+      update() {/* override */}
     }
-  }
 
-  // ==== ОТРИСОВКА ====
-  function draw() {
-    // Фон
-    ctx.fillStyle = '#222';
-    ctx.fillRect(0,0,canvas.width,canvas.height);
+    class Player extends GameObject {
+      constructor(x,y) {
+        super(x,y,28,32);
+        this.velX = 0; this.velY = 0;
+        this.speed = 3; this.jumpForce = 12;
+        this.jumping = false; this.direction = 1;
+        this.fireCooldown = 0; this.hasFire = false;
+      }
+      update() {
+        // Горизонтальное движение
+        if (keys['ArrowLeft']||keys['a']) { this.velX = -this.speed; this.direction=-1; }
+        if (keys['ArrowRight']||keys['d']){ this.velX = this.speed; this.direction=1; }
+        // Прыжок
+        if ((keys[' ']||keys['Spacebar']) && !this.jumping) {
+          this.jumping = true;
+          this.velY = -this.jumpForce;
+          // звук прыжка (вставить) 
+        }
+        // Огонь
+        if ((keys['Control']||keys['ControlLeft']) && this.hasFire && this.fireCooldown<=0) {
+          projectiles.push(new Fireball(this.x + this.direction*10, this.y+10, this.direction));
+          this.fireCooldown = 30; // кадров
+        }
+        this.fireCooldown = Math.max(0,this.fireCooldown-1);
 
-    // Еда
-    ctx.fillStyle = '#f55';
-    ctx.fillRect(food.x*TILE+2, food.y*TILE+2, TILE-4, TILE-4);
+        // Физика
+        this.velX *= FRICTION;
+        this.velY += GRAVITY;
+        this.x += this.velX;
+        this.y += this.velY;
 
-    // Змейка
-    ctx.fillStyle = '#5f5';
-    snake.forEach((p,i)=>{
-      let inset = (i===0?0:4);
-      ctx.fillRect(p.x*TILE+inset, p.y*TILE+inset, TILE-2*inset, TILE-2*inset);
+        // Камера следит за игроком
+        camera.x = this.x - canvas.width/2 + this.width/2;
+        camera.y = this.y - canvas.height/2 + this.height/2;
+
+        // Столкновения с миром
+        this.handleCollisions();
+
+        // Смерть при падении
+        if (this.y > ROWS*TILE) {
+          this.die();
+        }
+      }
+      handleCollisions() {
+        // Определяем границы тела
+        let left = Math.floor(this.x/TILE);
+        let right = Math.floor((this.x+this.width)/TILE);
+        let top = Math.floor(this.y/TILE);
+        let bottom = Math.floor((this.y+this.height)/TILE);
+        for (let r=top; r<=bottom; r++) {
+          for (let c=left; c<=right; c++) {
+            let tile = levelData[r]?.[c];
+            if (tile===1) {
+              // Блок земли
+              let tx = c*TILE, ty = r*TILE;
+              if (this.x+this.width>tx && this.x<tx+TILE && this.y+this.height>ty && this.y<ty+TILE) {
+                // снизу
+                if (this.velY>0) { this.y = ty-this.height; this.velY=0; this.jumping=false; }
+                // сверху
+                else if (this.velY<0) { this.y = ty+TILE; this.velY=0; }
+              }
+            }
+            if (tile===2) {
+              // Монета
+              coins = coins.filter(cn=>!(cn.row===r && cn.col===c));
+              score+=10; updateUI(); levelData[r][c]=0;
+            }
+            if (tile===3) {
+              // Гриб (ускорение)
+              levelData[r][c]=0; player.speed=6;
+            }
+            if (tile===4) {
+              // Огонь
+              levelData[r][c]=0; player.hasFire=true;
+            }
+          }
+        }
+      }
+      die() {
+        lives--; updateUI();
+        if (lives<0) gameOver();
+        else resetLevel();
+      }
+      draw() {
+        // Простая отрисовка прямоугольником или спрайт
+        ctx.save();
+        ctx.translate(this.x-camera.x, this.y-camera.y);
+        ctx.scale(this.direction,1);
+        ctx.drawImage(images['mario'], this.direction<0?32:0,0,28,32, this.direction<0?-28:0,0,28,32);
+        ctx.restore();
+      }
+    }
+
+    class Goomba extends GameObject {
+      constructor(x,y) { super(x,y,28,28); this.velX=1; }
+      update() {
+        this.x += this.velX;
+        // отскок от стен
+        let r = Math.floor(this.y/TILE), c = Math.floor((this.x+this.width/2)/TILE);
+        if (levelData[r]?.[c]===1) this.velX*=-1;
+        // столкновение с игроком
+        if (this.x+this.width>player.x && this.x<player.x+player.width && this.y+this.height>player.y && this.y<player.y+player.height) {
+          if (player.velY>0) { // топим гомбу
+            enemies = enemies.filter(e=>e!==this); score+=50; updateUI();
+          } else player.die();
+        }
+      }
+      draw() { ctx.drawImage(images['goomba'], this.x-camera.x, this.y-camera.y,28,28); }
+    }
+
+    class Fireball extends GameObject {
+      constructor(x,y,dir) { super(x,y,16,16); this.dir=dir; this.life=60; }
+      update() {
+        this.x += this.dir*5; this.y += GRAVITY;
+        this.life--; if (this.life<0) projectiles = projectiles.filter(p=>p!==this);
+        // столкновение
+        let r = Math.floor(this.y/TILE), c = Math.floor(this.x/TILE);
+        if (levelData[r]?.[c]===1) projectiles=projectiles.filter(p=>p!==this);
+      }
+      draw() { ctx.drawImage(images['fireball'], this.x-camera.x, this.y-camera.y,16,16); }
+    }
+
+    class Coin {
+      constructor(row,col) { this.row=row; this.col=col; }
+      draw() {
+        let x= this.col*TILE-camera.x+8;
+        let y= this.row*TILE-camera.y+8;
+        ctx.drawImage(images['coins'],0,0,16,16,x,y,16,16);
+      }
+    }
+
+    // --- Камера ---
+    class Camera { constructor() { this.x=0; this.y=0; } }
+
+    // --- Загрузка уровней ---
+    const levels = [
+      {
+        data: [ /* 17x30 чисел: 0-пусто,1-блок,2-монета,3-мушрум,4-огонь */
+          [/* ... */],
+          // заполнить данными или генерировать процедурно
+        ],
+        enemySpawns: [ {x:400,y:400}, /*...*/ ]
+      },
+      // можно добавить несколько уровней
+    ];
+
+    function loadLevel(idx) {
+      let lvl = levels[idx-1];
+      levelData = JSON.parse(JSON.stringify(lvl.data));
+      enemies = lvl.enemySpawns.map(s=>new Goomba(s.x,s.y));
+      coins = [];
+      for (let r=0;r<ROWS;r++) for (let c=0;c<COLS;c++) if (levelData[r][c]===2) coins.push(new Coin(r,c));
+      resetPlayer();
+    }
+
+    function resetLevel() {
+      loadLevel(level);
+    }
+
+    // --- Параллакс задний фон ---
+    function initParallax() {
+      bgLayers = [images['bg1'],images['bg2'],images['bg3']];
+      parallaxSpeeds = [0.2,0.5,1];
+    }
+    function drawParallax() {
+      bgLayers.forEach((img,i)=>{
+        let speed = parallaxSpeeds[i];
+        let x = -camera.x*speed % canvas.width;
+        ctx.drawImage(img,x,0,canvas.width,canvas.height);
+        if (x<0) ctx.drawImage(img,x+canvas.width,0,canvas.width,canvas.height);
+      });
+    }
+
+    // --- Обновление UI ---
+    function updateUI() {
+      UI.textContent = `Score: ${score} | Lives: ${lives} | Level: ${level}`;
+    }
+
+    // --- Главный цикл ---
+    let lastTime=0;
+    function gameLoop(ts) {
+      requestAnimationFrame(gameLoop);
+      if (gameState!==STATE.PLAY) return;
+      if (ts-lastTime<1000/60) return;
+      lastTime=ts;
+
+      // Обновления
+      player.update();
+      enemies.forEach(e=>e.update());
+      projectiles.forEach(p=>p.update());
+
+      // Очистка
+      ctx.clearRect(0,0,canvas.width,canvas.height);
+
+      // Рисуем фон
+      drawParallax();
+      
+      // Рисуем тайлы
+      for (let r=0;r<ROWS;r++) for (let c=0;c<COLS;c++) {
+        let t=levelData[r][c]; if (!t) continue;
+        let sx= (t===1?0:(t===3?32: t===4?64: 0));
+        let sy= (t===2?0: t===1?0: t===3?32: t===4?32:0);
+        ctx.drawImage(images['tiles'], sx,sy,32,32, c*TILE-camera.x, r*TILE-camera.y,32,32);
+      }
+
+      // Draw collectibles
+      coins.forEach(cn=>cn.draw());
+
+      // Draw actors
+      enemies.forEach(e=>e.draw());
+      projectiles.forEach(p=>p.draw());
+      player.draw();
+    }
+
+    // --- Состояния игры ---
+    startBtn.addEventListener('click', ()=>{
+      menu.classList.add('hidden'); gameState=STATE.PLAY; loadLevel(level);
     });
+    instrBtn.addEventListener('click', ()=>{ instructions.classList.remove('hidden'); });
+    backBtn.addEventListener('click', ()=>{ instructions.classList.add('hidden'); });
 
-    // Счёт
-    ctx.fillStyle = '#eee';
-    ctx.font = '16px sans-serif';
-    ctx.fillText('Score: '+score, 10, 20);
-    ctx.fillText('High: '+highScore, canvas.width-100, 20);
-  }
-
-  // ==== ПЕРЕКЛЮЧЕНИЕ ПАУЗЫ ====
-  function togglePause() {
-    if (state===STATE.PLAY) showScreen(STATE.PAUSE);
-    else if (state===STATE.PAUSE) showScreen(STATE.PLAY);
-  }
-
-  // ==== GAME OVER ====
-  function gameOver() {
-    showScreen(STATE.OVER);
-    gameOverT.textContent = 'Game Over';
-    scoreT.textContent = 'Счёт: '+score;
-    if (score > highScore) {
-      highScore = score;
-      localStorage.setItem('snakeHigh', highScore);
-      scoreT.textContent += ' (New High!)';
+    function gameOver() {
+      gameState=STATE.OVER; alert(`Game Over! Score: ${score}`); location.reload();
     }
-  }
 
-  // ==== ГЛАВНЫЙ ЦИКЛ ====
-  let lastTime = 0;
-  function loop(timestamp) {
-    if (state === STATE.PLAY) {
-      if (timestamp - lastTime > 1000/speed) {
-        update();
-        draw();
-        lastTime = timestamp;
-      }
-    }
-    requestAnimationFrame(loop);
-  }
+    // --- Ввод ---
+    document.addEventListener('keydown', e=> keys[e.key]=true);
+    document.addEventListener('keyup', e=> keys[e.key]=false);
+    canvas.addEventListener('touchstart', e=>{ lastTouch=e.touches[0]; });
+    canvas.addEventListener('touchmove', e=>{
+      let t=e.touches[0], dx=t.clientX-lastTouch.clientX, dy=t.clientY-lastTouch.clientY;
+      if (Math.abs(dx)>Math.abs(dy)) { keys[dx>0?'ArrowRight':'ArrowLeft']=true; }
+      else { keys[dy>0?'ArrowDown':'ArrowUp']=true; }
+      lastTouch=t;
+    });
+    canvas.addEventListener('touchend', ()=>{ keys={}; });
 
-  // ==== УПРАВЛЕНИЕ ====
-  document.addEventListener('keydown', e=>{
-    if (state === STATE.TITLE && e.code === 'Enter') {
-      showScreen(STATE.PLAY);
-    }
-    else if (state === STATE.OVER && e.code === 'Enter') {
-      init();
-    }
-    else if (state === STATE.PLAY || state === STATE.PAUSE) {
-      switch(e.code) {
-        case 'KeyW': case 'ArrowUp':
-          if (dir.y === 0) nextDir = { x:0, y:-1 }; break;
-        case 'KeyS': case 'ArrowDown':
-          if (dir.y === 0) nextDir = { x:0, y:1 }; break;
-        case 'KeyA': case 'ArrowLeft':
-          if (dir.x === 0) nextDir = { x:-1, y:0 }; break;
-        case 'KeyD': case 'ArrowRight':
-          if (dir.x === 0) nextDir = { x:1, y:0 }; break;
-        case 'KeyP':
-          togglePause(); break;
-      }
-      if (state===STATE.PAUSE && e.code==='KeyP') showScreen(STATE.PLAY);
-    }
-  });
-
-  // ==== СЕНСОРНОЕ УПРАВЛЕНИЕ (МОБИЛКА) ====
-  let touchStart = null;
-  canvas.addEventListener('touchstart', e=>{
-    let t = e.touches[0];
-    touchStart = { x:t.clientX, y:t.clientY };
-  });
-  canvas.addEventListener('touchmove', e=>{
-    if (!touchStart) return;
-    let t = e.touches[0];
-    let dx = t.clientX - touchStart.x;
-    let dy = t.clientY - touchStart.y;
-    if (Math.abs(dx)>Math.abs(dy)) {
-      if (dx>20 && dir.x===0) nextDir = { x:1, y:0 };
-      if (dx<-20 && dir.x===0) nextDir = { x:-1, y:0 };
-    } else {
-      if (dy>20 && dir.y===0) nextDir = { x:0, y:1 };
-      if (dy<-20 && dir.y===0) nextDir = { x:0, y:-1 };
-    }
-    touchStart = null;
-  });
-
-  // ==== ЗАПУСК ====
-  init();
-  requestAnimationFrame(loop);
+    // --- Инициализация ---
+    loadImages(()=>{ initParallax(); /* скрыть меню? */ });
+    requestAnimationFrame(gameLoop);
   </script>
 </body>
 </html>
