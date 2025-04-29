@@ -23,23 +23,19 @@
   <canvas id="gameCanvas" width="1024" height="576" style="display: none;"></canvas>
   <script>
     let difficulty = 'normal';
-
     function startGame(diff) {
       difficulty = diff;
       document.getElementById('menu').style.display = 'none';
       document.getElementById('gameCanvas').style.display = 'block';
       init();
     }
-
     function init() {
       const canvas = document.getElementById("gameCanvas");
       const ctx = canvas.getContext("2d");
       const keys = {};
       const gravity = 0.5;
-
       let level = 0;
       let maxLevels = 10;
-
       class GameObject {
         constructor(x, y, width, height, color) {
           this.x = x;
@@ -53,7 +49,6 @@
           ctx.fillRect(this.x, this.y, this.width, this.height);
         }
       }
-
       class Player extends GameObject {
         constructor() {
           super(100, 0, 32, 48, 'red');
@@ -62,18 +57,14 @@
           this.speed = 5;
           this.jumpForce = -12;
           this.grounded = false;
-          this.score = 0;
         }
         update(platforms, enemies) {
           this.dy += gravity;
           this.dx = 0;
-
           if (keys['ArrowRight'] || keys['d']) this.dx = this.speed;
           if (keys['ArrowLeft'] || keys['a']) this.dx = -this.speed;
-
           this.x += this.dx;
           this.y += this.dy;
-
           this.grounded = false;
           for (let platform of platforms) {
             if (this.x < platform.x + platform.width &&
@@ -87,7 +78,6 @@
               }
             }
           }
-
           for (let enemy of enemies) {
             if (this.x < enemy.x + enemy.width &&
                 this.x + this.width > enemy.x &&
@@ -101,9 +91,7 @@
               }
             }
           }
-
           if (this.y > canvas.height) this.reset();
-
           this.draw();
         }
         jump() {
@@ -118,13 +106,11 @@
           this.dy = 0;
         }
       }
-
       class Platform extends GameObject {
         constructor(x, y, width, height) {
           super(x, y, width, height, '#8b4513');
         }
       }
-
       class Enemy extends GameObject {
         constructor(x, y) {
           super(x, y, 32, 32, 'green');
@@ -138,11 +124,9 @@
           this.draw();
         }
       }
-
       const player = new Player();
       let platforms = [];
       let enemies = [];
-
       function generateLevel(lvl) {
         platforms = [new Platform(0, canvas.height - 20, canvas.width, 20)];
         enemies = [];
@@ -151,7 +135,6 @@
           if (i % 2 === 0) enemies.push(new Enemy(150 + i * 150, 500 - i * 30 - 32));
         }
       }
-
       function nextLevel() {
         level++;
         if (level >= maxLevels) {
@@ -161,27 +144,20 @@
         player.reset();
         generateLevel(level);
       }
-
       function drawUI() {
         ctx.fillStyle = '#fff';
         ctx.font = '20px Arial';
         ctx.fillText(`Level: ${level + 1} / ${maxLevels}`, 20, 30);
       }
-
       function gameLoop() {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
-
         for (let p of platforms) p.draw();
         for (let e of enemies) e.update(platforms);
-
         player.update(platforms, enemies);
-
         if (player.x > canvas.width - 50) nextLevel();
-
         drawUI();
         requestAnimationFrame(gameLoop);
       }
-
       window.addEventListener('keydown', (e) => {
         keys[e.key] = true;
         if (e.key === 'ArrowUp' || e.key === 'w') player.jump();
@@ -189,7 +165,6 @@
       window.addEventListener('keyup', (e) => {
         keys[e.key] = false;
       });
-
       generateLevel(level);
       gameLoop();
     }
