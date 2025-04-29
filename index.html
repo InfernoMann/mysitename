@@ -1,340 +1,190 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Необычный Mario</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mario-Style Platformer</title>
   <style>
-    /* --- Сброс стилей и базовые настройки --- */
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    html, body { height: 100%; overflow: hidden; }
-    body { background: #87CEEB; font-family: sans-serif; position: relative; }
-    canvas { background: transparent; display: block; margin: 0 auto; }
-    #ui { position: absolute; top: 10px; left: 50%; transform: translateX(-50%); color: #fff; font-size: 18px; text-shadow: 1px 1px 2px #000; }
-    .fade { transition: opacity 0.5s; }
-    .hidden { opacity: 0; pointer-events: none; }
-    /* --- Меню и оверлей --- */
-    #menu { position: absolute; width: 100%; height: 100%; background: rgba(0,0,0,0.7); display: flex; flex-direction: column; align-items: center; justify-content: center; color: #fff; }
-    #menu h1 { font-size: 48px; margin-bottom: 20px; }
-    #menu button { padding: 10px 20px; font-size: 20px; margin: 5px; cursor: pointer; border: none; border-radius: 5px; }
-    #menu button:hover { background: rgba(255,255,255,0.2); }
+    body { background: #87ceeb; font-family: sans-serif; }
+    canvas { display: block; margin: 0 auto; background: #6b8e23; border: 3px solid #000; }
   </style>
 </head>
 <body>
-  <canvas id="gameCanvas" width="960" height="540"></canvas>
-  <div id="ui">Score: 0 | Lives: 3 | Level: 1</div>
-  <div id="menu">
-    <h1>Необычный Mario</h1>
-    <button id="startBtn">Начать игру</button>
-    <button id="instructionsBtn">Инструкции</button>
-    <div id="instructions" class="hidden fade">
-      <p>Стрелки — движение</p>
-      <p>Пробел — прыжок</p>
-      <p>Ctrl — бросок огненного шара (после бонуса)</p>
-      <button id="backBtn">Назад</button>
-    </div>
-  </div>
+  <canvas id="gameCanvas" width="1024" height="576"></canvas>
   <script>
-    // =========================================
-    // == Необычный Mario Platformer (~500 строк)
-    // =========================================
+    const canvas = document.getElementById("gameCanvas");
+    const ctx = canvas.getContext("2d");
 
-    // --- Константы ---
-    const canvas = document.getElementById('gameCanvas');
-    const ctx = canvas.getContext('2d');
-    const UI = document.getElementById('ui');
-    const menu = document.getElementById('menu');
-    const startBtn = document.getElementById('startBtn');
-    const instrBtn = document.getElementById('instructionsBtn');
-    const backBtn = document.getElementById('backBtn');
-    const instructions = document.getElementById('instructions');
+    const keys = {};
+    const gravity = 0.5;
 
-    const GRAVITY = 0.6;
-    const FRICTION = 0.8;
-    const TILE = 32;
-    const ROWS = 17;
-    const COLS = 30;
-
-    const STATE = { MENU: 0, PLAY:1, PAUSE:2, OVER:3 };
-    let gameState = STATE.MENU;
-
-    let keys = {}, touches = {}, lastTouch = null;
-    let score = 0, lives = 3, level = 1;
-    let player, camera, levelData, enemies = [], coins = [], projectiles = [];
-    let bgLayers = [], parallaxSpeeds = [];
-
-    // --- Загрузка изображений ---
-    const imageFiles = {
-      'tiles': 'tiles.png',  // тайл-спрайт карта
-      'mario': 'mario.png',  // спрайт игрока
-      'goomba': 'goomba.png',// враг
-      'fireball': 'fireball.png',
-      'coins': 'coins.png',
-      'bg1':'bg_layer1.png', 'bg2':'bg_layer2.png', 'bg3':'bg_layer3.png'
-    };
-    const images = {};
-
-    function loadImages(callback) {
-      let loaded = 0, total = Object.keys(imageFiles).length;
-      for (let key in imageFiles) {
-        images[key] = new Image();
-        images[key].src = imageFiles[key];
-        images[key].onload = () => {
-          loaded++;
-          if (loaded === total) callback();
-        };
-      }
-    }
-
-    // --- Классы игровых объектов ---
     class GameObject {
-      constructor(x,y,w,h) {
-        this.x = x; this.y = y;
-        this.width = w; this.height = h;
+      constructor(x, y, width, height, color) {
+        this.x = x;
+        this.y = y;
+        this.width = width;
+        this.height = height;
+        this.color = color;
       }
-      draw() {/* override */}
-      update() {/* override */}
+      draw() {
+        ctx.fillStyle = this.color;
+        ctx.fillRect(this.x, this.y, this.width, this.height);
+      }
     }
 
     class Player extends GameObject {
-      constructor(x,y) {
-        super(x,y,28,32);
-        this.velX = 0; this.velY = 0;
-        this.speed = 3; this.jumpForce = 12;
-        this.jumping = false; this.direction = 1;
-        this.fireCooldown = 0; this.hasFire = false;
+      constructor() {
+        super(100, 0, 32, 48, 'red');
+        this.dy = 0;
+        this.dx = 0;
+        this.speed = 5;
+        this.jumpForce = -12;
+        this.grounded = false;
+        this.score = 0;
       }
-      update() {
-        // Горизонтальное движение
-        if (keys['ArrowLeft']||keys['a']) { this.velX = -this.speed; this.direction=-1; }
-        if (keys['ArrowRight']||keys['d']){ this.velX = this.speed; this.direction=1; }
-        // Прыжок
-        if ((keys[' ']||keys['Spacebar']) && !this.jumping) {
-          this.jumping = true;
-          this.velY = -this.jumpForce;
-          // звук прыжка (вставить) 
-        }
-        // Огонь
-        if ((keys['Control']||keys['ControlLeft']) && this.hasFire && this.fireCooldown<=0) {
-          projectiles.push(new Fireball(this.x + this.direction*10, this.y+10, this.direction));
-          this.fireCooldown = 30; // кадров
-        }
-        this.fireCooldown = Math.max(0,this.fireCooldown-1);
+      update(platforms) {
+        this.dy += gravity;
+        this.dx = 0;
 
-        // Физика
-        this.velX *= FRICTION;
-        this.velY += GRAVITY;
-        this.x += this.velX;
-        this.y += this.velY;
+        if (keys['ArrowRight'] || keys['d']) this.dx = this.speed;
+        if (keys['ArrowLeft'] || keys['a']) this.dx = -this.speed;
 
-        // Камера следит за игроком
-        camera.x = this.x - canvas.width/2 + this.width/2;
-        camera.y = this.y - canvas.height/2 + this.height/2;
+        this.x += this.dx;
+        this.y += this.dy;
 
-        // Столкновения с миром
-        this.handleCollisions();
+        this.grounded = false;
 
-        // Смерть при падении
-        if (this.y > ROWS*TILE) {
-          this.die();
-        }
-      }
-      handleCollisions() {
-        // Определяем границы тела
-        let left = Math.floor(this.x/TILE);
-        let right = Math.floor((this.x+this.width)/TILE);
-        let top = Math.floor(this.y/TILE);
-        let bottom = Math.floor((this.y+this.height)/TILE);
-        for (let r=top; r<=bottom; r++) {
-          for (let c=left; c<=right; c++) {
-            let tile = levelData[r]?.[c];
-            if (tile===1) {
-              // Блок земли
-              let tx = c*TILE, ty = r*TILE;
-              if (this.x+this.width>tx && this.x<tx+TILE && this.y+this.height>ty && this.y<ty+TILE) {
-                // снизу
-                if (this.velY>0) { this.y = ty-this.height; this.velY=0; this.jumping=false; }
-                // сверху
-                else if (this.velY<0) { this.y = ty+TILE; this.velY=0; }
-              }
-            }
-            if (tile===2) {
-              // Монета
-              coins = coins.filter(cn=>!(cn.row===r && cn.col===c));
-              score+=10; updateUI(); levelData[r][c]=0;
-            }
-            if (tile===3) {
-              // Гриб (ускорение)
-              levelData[r][c]=0; player.speed=6;
-            }
-            if (tile===4) {
-              // Огонь
-              levelData[r][c]=0; player.hasFire=true;
+        for (let platform of platforms) {
+          if (
+            this.x < platform.x + platform.width &&
+            this.x + this.width > platform.x &&
+            this.y < platform.y + platform.height &&
+            this.y + this.height > platform.y
+          ) {
+            if (this.dy > 0) {
+              this.y = platform.y - this.height;
+              this.dy = 0;
+              this.grounded = true;
             }
           }
         }
-      }
-      die() {
-        lives--; updateUI();
-        if (lives<0) gameOver();
-        else resetLevel();
-      }
-      draw() {
-        // Простая отрисовка прямоугольником или спрайт
-        ctx.save();
-        ctx.translate(this.x-camera.x, this.y-camera.y);
-        ctx.scale(this.direction,1);
-        ctx.drawImage(images['mario'], this.direction<0?32:0,0,28,32, this.direction<0?-28:0,0,28,32);
-        ctx.restore();
-      }
-    }
 
-    class Goomba extends GameObject {
-      constructor(x,y) { super(x,y,28,28); this.velX=1; }
-      update() {
-        this.x += this.velX;
-        // отскок от стен
-        let r = Math.floor(this.y/TILE), c = Math.floor((this.x+this.width/2)/TILE);
-        if (levelData[r]?.[c]===1) this.velX*=-1;
-        // столкновение с игроком
-        if (this.x+this.width>player.x && this.x<player.x+player.width && this.y+this.height>player.y && this.y<player.y+player.height) {
-          if (player.velY>0) { // топим гомбу
-            enemies = enemies.filter(e=>e!==this); score+=50; updateUI();
-          } else player.die();
+        if (this.y > canvas.height) this.reset();
+
+        this.draw();
+      }
+      jump() {
+        if (this.grounded) {
+          this.dy = this.jumpForce;
+          this.grounded = false;
         }
       }
-      draw() { ctx.drawImage(images['goomba'], this.x-camera.x, this.y-camera.y,28,28); }
-    }
-
-    class Fireball extends GameObject {
-      constructor(x,y,dir) { super(x,y,16,16); this.dir=dir; this.life=60; }
-      update() {
-        this.x += this.dir*5; this.y += GRAVITY;
-        this.life--; if (this.life<0) projectiles = projectiles.filter(p=>p!==this);
-        // столкновение
-        let r = Math.floor(this.y/TILE), c = Math.floor(this.x/TILE);
-        if (levelData[r]?.[c]===1) projectiles=projectiles.filter(p=>p!==this);
-      }
-      draw() { ctx.drawImage(images['fireball'], this.x-camera.x, this.y-camera.y,16,16); }
-    }
-
-    class Coin {
-      constructor(row,col) { this.row=row; this.col=col; }
-      draw() {
-        let x= this.col*TILE-camera.x+8;
-        let y= this.row*TILE-camera.y+8;
-        ctx.drawImage(images['coins'],0,0,16,16,x,y,16,16);
+      reset() {
+        this.x = 100;
+        this.y = 0;
+        this.dy = 0;
+        this.score = 0;
       }
     }
 
-    // --- Камера ---
-    class Camera { constructor() { this.x=0; this.y=0; } }
+    class Platform extends GameObject {
+      constructor(x, y, width, height) {
+        super(x, y, width, height, '#8b4513');
+      }
+    }
 
-    // --- Загрузка уровней ---
-    const levels = [
-      {
-        data: [ /* 17x30 чисел: 0-пусто,1-блок,2-монета,3-мушрум,4-огонь */
-          [/* ... */],
-          // заполнить данными или генерировать процедурно
-        ],
-        enemySpawns: [ {x:400,y:400}, /*...*/ ]
-      },
-      // можно добавить несколько уровней
+    class Coin extends GameObject {
+      constructor(x, y) {
+        super(x, y, 16, 16, 'gold');
+        this.collected = false;
+      }
+      collect(player) {
+        if (!this.collected &&
+          player.x < this.x + this.width &&
+          player.x + player.width > this.x &&
+          player.y < this.y + this.height &&
+          player.y + player.height > this.y
+        ) {
+          this.collected = true;
+          player.score++;
+        }
+      }
+    }
+
+    class Enemy extends GameObject {
+      constructor(x, y) {
+        super(x, y, 32, 32, 'green');
+        this.dx = 2;
+      }
+      update(platforms) {
+        this.x += this.dx;
+        for (let p of platforms) {
+          if (
+            this.x < p.x + p.width &&
+            this.x + this.width > p.x &&
+            this.y + this.height >= p.y &&
+            this.y <= p.y + p.height
+          ) {
+            if (this.x <= p.x || this.x + this.width >= p.x + p.width) this.dx *= -1;
+          }
+        }
+        this.draw();
+      }
+    }
+
+    const player = new Player();
+    const platforms = [
+      new Platform(0, canvas.height - 20, canvas.width, 20),
+      new Platform(200, 450, 120, 20),
+      new Platform(400, 400, 120, 20),
+      new Platform(600, 350, 120, 20),
+      new Platform(800, 300, 120, 20),
     ];
 
-    function loadLevel(idx) {
-      let lvl = levels[idx-1];
-      levelData = JSON.parse(JSON.stringify(lvl.data));
-      enemies = lvl.enemySpawns.map(s=>new Goomba(s.x,s.y));
-      coins = [];
-      for (let r=0;r<ROWS;r++) for (let c=0;c<COLS;c++) if (levelData[r][c]===2) coins.push(new Coin(r,c));
-      resetPlayer();
+    const coins = [
+      new Coin(210, 430),
+      new Coin(410, 380),
+      new Coin(610, 330),
+      new Coin(810, 280),
+    ];
+
+    const enemies = [
+      new Enemy(500, canvas.height - 52),
+      new Enemy(700, canvas.height - 52),
+    ];
+
+    function drawScore() {
+      ctx.fillStyle = '#000';
+      ctx.font = '20px Arial';
+      ctx.fillText(`Score: ${player.score}`, 20, 30);
     }
 
-    function resetLevel() {
-      loadLevel(level);
-    }
+    function gameLoop() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    // --- Параллакс задний фон ---
-    function initParallax() {
-      bgLayers = [images['bg1'],images['bg2'],images['bg3']];
-      parallaxSpeeds = [0.2,0.5,1];
-    }
-    function drawParallax() {
-      bgLayers.forEach((img,i)=>{
-        let speed = parallaxSpeeds[i];
-        let x = -camera.x*speed % canvas.width;
-        ctx.drawImage(img,x,0,canvas.width,canvas.height);
-        if (x<0) ctx.drawImage(img,x+canvas.width,0,canvas.width,canvas.height);
-      });
-    }
-
-    // --- Обновление UI ---
-    function updateUI() {
-      UI.textContent = `Score: ${score} | Lives: ${lives} | Level: ${level}`;
-    }
-
-    // --- Главный цикл ---
-    let lastTime=0;
-    function gameLoop(ts) {
-      requestAnimationFrame(gameLoop);
-      if (gameState!==STATE.PLAY) return;
-      if (ts-lastTime<1000/60) return;
-      lastTime=ts;
-
-      // Обновления
-      player.update();
-      enemies.forEach(e=>e.update());
-      projectiles.forEach(p=>p.update());
-
-      // Очистка
-      ctx.clearRect(0,0,canvas.width,canvas.height);
-
-      // Рисуем фон
-      drawParallax();
-      
-      // Рисуем тайлы
-      for (let r=0;r<ROWS;r++) for (let c=0;c<COLS;c++) {
-        let t=levelData[r][c]; if (!t) continue;
-        let sx= (t===1?0:(t===3?32: t===4?64: 0));
-        let sy= (t===2?0: t===1?0: t===3?32: t===4?32:0);
-        ctx.drawImage(images['tiles'], sx,sy,32,32, c*TILE-camera.x, r*TILE-camera.y,32,32);
+      for (let p of platforms) p.draw();
+      for (let c of coins) {
+        if (!c.collected) c.draw();
+        c.collect(player);
       }
+      for (let e of enemies) e.update(platforms);
 
-      // Draw collectibles
-      coins.forEach(cn=>cn.draw());
+      player.update(platforms);
 
-      // Draw actors
-      enemies.forEach(e=>e.draw());
-      projectiles.forEach(p=>p.draw());
-      player.draw();
+      drawScore();
+      requestAnimationFrame(gameLoop);
     }
 
-    // --- Состояния игры ---
-    startBtn.addEventListener('click', ()=>{
-      menu.classList.add('hidden'); gameState=STATE.PLAY; loadLevel(level);
+    window.addEventListener('keydown', (e) => {
+      keys[e.key] = true;
+      if (e.key === 'ArrowUp' || e.key === 'w') player.jump();
     });
-    instrBtn.addEventListener('click', ()=>{ instructions.classList.remove('hidden'); });
-    backBtn.addEventListener('click', ()=>{ instructions.classList.add('hidden'); });
-
-    function gameOver() {
-      gameState=STATE.OVER; alert(`Game Over! Score: ${score}`); location.reload();
-    }
-
-    // --- Ввод ---
-    document.addEventListener('keydown', e=> keys[e.key]=true);
-    document.addEventListener('keyup', e=> keys[e.key]=false);
-    canvas.addEventListener('touchstart', e=>{ lastTouch=e.touches[0]; });
-    canvas.addEventListener('touchmove', e=>{
-      let t=e.touches[0], dx=t.clientX-lastTouch.clientX, dy=t.clientY-lastTouch.clientY;
-      if (Math.abs(dx)>Math.abs(dy)) { keys[dx>0?'ArrowRight':'ArrowLeft']=true; }
-      else { keys[dy>0?'ArrowDown':'ArrowUp']=true; }
-      lastTouch=t;
+    window.addEventListener('keyup', (e) => {
+      keys[e.key] = false;
     });
-    canvas.addEventListener('touchend', ()=>{ keys={}; });
 
-    // --- Инициализация ---
-    loadImages(()=>{ initParallax(); /* скрыть меню? */ });
-    requestAnimationFrame(gameLoop);
+    gameLoop();
   </script>
 </body>
 </html>
