@@ -3,188 +3,196 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Mario-Style Platformer</title>
+  <title>Mario Platformer</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { background: #87ceeb; font-family: sans-serif; }
-    canvas { display: block; margin: 0 auto; background: #6b8e23; border: 3px solid #000; }
+    body { background: #222; font-family: 'Segoe UI', sans-serif; color: #fff; text-align: center; }
+    canvas { display: block; margin: 20px auto; background: #87ceeb; border: 4px solid #000; }
+    #menu { position: absolute; top: 30%; left: 50%; transform: translateX(-50%); text-align: center; }
+    .btn { padding: 10px 20px; font-size: 18px; background: #f90; border: none; margin: 10px; cursor: pointer; border-radius: 8px; }
   </style>
 </head>
 <body>
-  <canvas id="gameCanvas" width="1024" height="576"></canvas>
+  <div id="menu">
+    <h1>Mario Platformer</h1>
+    <p>Select difficulty:</p>
+    <button class="btn" onclick="startGame('easy')">Easy</button>
+    <button class="btn" onclick="startGame('normal')">Normal</button>
+    <button class="btn" onclick="startGame('hard')">Hard</button>
+  </div>
+  <canvas id="gameCanvas" width="1024" height="576" style="display: none;"></canvas>
   <script>
-    const canvas = document.getElementById("gameCanvas");
-    const ctx = canvas.getContext("2d");
+    let difficulty = 'normal';
 
-    const keys = {};
-    const gravity = 0.5;
-
-    class GameObject {
-      constructor(x, y, width, height, color) {
-        this.x = x;
-        this.y = y;
-        this.width = width;
-        this.height = height;
-        this.color = color;
-      }
-      draw() {
-        ctx.fillStyle = this.color;
-        ctx.fillRect(this.x, this.y, this.width, this.height);
-      }
+    function startGame(diff) {
+      difficulty = diff;
+      document.getElementById('menu').style.display = 'none';
+      document.getElementById('gameCanvas').style.display = 'block';
+      init();
     }
 
-    class Player extends GameObject {
-      constructor() {
-        super(100, 0, 32, 48, 'red');
-        this.dy = 0;
-        this.dx = 0;
-        this.speed = 5;
-        this.jumpForce = -12;
-        this.grounded = false;
-        this.score = 0;
+    function init() {
+      const canvas = document.getElementById("gameCanvas");
+      const ctx = canvas.getContext("2d");
+      const keys = {};
+      const gravity = 0.5;
+
+      let level = 0;
+      let maxLevels = 10;
+
+      class GameObject {
+        constructor(x, y, width, height, color) {
+          this.x = x;
+          this.y = y;
+          this.width = width;
+          this.height = height;
+          this.color = color;
+        }
+        draw() {
+          ctx.fillStyle = this.color;
+          ctx.fillRect(this.x, this.y, this.width, this.height);
+        }
       }
-      update(platforms) {
-        this.dy += gravity;
-        this.dx = 0;
 
-        if (keys['ArrowRight'] || keys['d']) this.dx = this.speed;
-        if (keys['ArrowLeft'] || keys['a']) this.dx = -this.speed;
+      class Player extends GameObject {
+        constructor() {
+          super(100, 0, 32, 48, 'red');
+          this.dy = 0;
+          this.dx = 0;
+          this.speed = 5;
+          this.jumpForce = -12;
+          this.grounded = false;
+          this.score = 0;
+        }
+        update(platforms, enemies) {
+          this.dy += gravity;
+          this.dx = 0;
 
-        this.x += this.dx;
-        this.y += this.dy;
+          if (keys['ArrowRight'] || keys['d']) this.dx = this.speed;
+          if (keys['ArrowLeft'] || keys['a']) this.dx = -this.speed;
 
-        this.grounded = false;
+          this.x += this.dx;
+          this.y += this.dy;
 
-        for (let platform of platforms) {
-          if (
-            this.x < platform.x + platform.width &&
-            this.x + this.width > platform.x &&
-            this.y < platform.y + platform.height &&
-            this.y + this.height > platform.y
-          ) {
-            if (this.dy > 0) {
-              this.y = platform.y - this.height;
-              this.dy = 0;
-              this.grounded = true;
+          this.grounded = false;
+          for (let platform of platforms) {
+            if (this.x < platform.x + platform.width &&
+                this.x + this.width > platform.x &&
+                this.y + this.height > platform.y &&
+                this.y < platform.y + platform.height) {
+              if (this.dy > 0) {
+                this.y = platform.y - this.height;
+                this.dy = 0;
+                this.grounded = true;
+              }
             }
           }
+
+          for (let enemy of enemies) {
+            if (this.x < enemy.x + enemy.width &&
+                this.x + this.width > enemy.x &&
+                this.y < enemy.y + enemy.height &&
+                this.y + this.height > enemy.y) {
+              if (this.dy > 0) {
+                enemies.splice(enemies.indexOf(enemy), 1);
+                this.dy = this.jumpForce / 1.5;
+              } else {
+                this.reset();
+              }
+            }
+          }
+
+          if (this.y > canvas.height) this.reset();
+
+          this.draw();
         }
-
-        if (this.y > canvas.height) this.reset();
-
-        this.draw();
-      }
-      jump() {
-        if (this.grounded) {
-          this.dy = this.jumpForce;
-          this.grounded = false;
-        }
-      }
-      reset() {
-        this.x = 100;
-        this.y = 0;
-        this.dy = 0;
-        this.score = 0;
-      }
-    }
-
-    class Platform extends GameObject {
-      constructor(x, y, width, height) {
-        super(x, y, width, height, '#8b4513');
-      }
-    }
-
-    class Coin extends GameObject {
-      constructor(x, y) {
-        super(x, y, 16, 16, 'gold');
-        this.collected = false;
-      }
-      collect(player) {
-        if (!this.collected &&
-          player.x < this.x + this.width &&
-          player.x + player.width > this.x &&
-          player.y < this.y + this.height &&
-          player.y + player.height > this.y
-        ) {
-          this.collected = true;
-          player.score++;
-        }
-      }
-    }
-
-    class Enemy extends GameObject {
-      constructor(x, y) {
-        super(x, y, 32, 32, 'green');
-        this.dx = 2;
-      }
-      update(platforms) {
-        this.x += this.dx;
-        for (let p of platforms) {
-          if (
-            this.x < p.x + p.width &&
-            this.x + this.width > p.x &&
-            this.y + this.height >= p.y &&
-            this.y <= p.y + p.height
-          ) {
-            if (this.x <= p.x || this.x + this.width >= p.x + p.width) this.dx *= -1;
+        jump() {
+          if (this.grounded) {
+            this.dy = this.jumpForce;
+            this.grounded = false;
           }
         }
-        this.draw();
+        reset() {
+          this.x = 100;
+          this.y = 0;
+          this.dy = 0;
+        }
       }
-    }
 
-    const player = new Player();
-    const platforms = [
-      new Platform(0, canvas.height - 20, canvas.width, 20),
-      new Platform(200, 450, 120, 20),
-      new Platform(400, 400, 120, 20),
-      new Platform(600, 350, 120, 20),
-      new Platform(800, 300, 120, 20),
-    ];
-
-    const coins = [
-      new Coin(210, 430),
-      new Coin(410, 380),
-      new Coin(610, 330),
-      new Coin(810, 280),
-    ];
-
-    const enemies = [
-      new Enemy(500, canvas.height - 52),
-      new Enemy(700, canvas.height - 52),
-    ];
-
-    function drawScore() {
-      ctx.fillStyle = '#000';
-      ctx.font = '20px Arial';
-      ctx.fillText(`Score: ${player.score}`, 20, 30);
-    }
-
-    function gameLoop() {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-      for (let p of platforms) p.draw();
-      for (let c of coins) {
-        if (!c.collected) c.draw();
-        c.collect(player);
+      class Platform extends GameObject {
+        constructor(x, y, width, height) {
+          super(x, y, width, height, '#8b4513');
+        }
       }
-      for (let e of enemies) e.update(platforms);
 
-      player.update(platforms);
+      class Enemy extends GameObject {
+        constructor(x, y) {
+          super(x, y, 32, 32, 'green');
+          this.dx = difficulty === 'easy' ? 1 : difficulty === 'hard' ? 3 : 2;
+        }
+        update(platforms) {
+          this.x += this.dx;
+          for (let p of platforms) {
+            if (this.x <= p.x || this.x + this.width >= p.x + p.width) this.dx *= -1;
+          }
+          this.draw();
+        }
+      }
 
-      drawScore();
-      requestAnimationFrame(gameLoop);
+      const player = new Player();
+      let platforms = [];
+      let enemies = [];
+
+      function generateLevel(lvl) {
+        platforms = [new Platform(0, canvas.height - 20, canvas.width, 20)];
+        enemies = [];
+        for (let i = 0; i < 5 + lvl; i++) {
+          platforms.push(new Platform(150 + i * 150, 500 - i * 30, 100, 10));
+          if (i % 2 === 0) enemies.push(new Enemy(150 + i * 150, 500 - i * 30 - 32));
+        }
+      }
+
+      function nextLevel() {
+        level++;
+        if (level >= maxLevels) {
+          alert("You completed all levels!");
+          level = 0;
+        }
+        player.reset();
+        generateLevel(level);
+      }
+
+      function drawUI() {
+        ctx.fillStyle = '#fff';
+        ctx.font = '20px Arial';
+        ctx.fillText(`Level: ${level + 1} / ${maxLevels}`, 20, 30);
+      }
+
+      function gameLoop() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        for (let p of platforms) p.draw();
+        for (let e of enemies) e.update(platforms);
+
+        player.update(platforms, enemies);
+
+        if (player.x > canvas.width - 50) nextLevel();
+
+        drawUI();
+        requestAnimationFrame(gameLoop);
+      }
+
+      window.addEventListener('keydown', (e) => {
+        keys[e.key] = true;
+        if (e.key === 'ArrowUp' || e.key === 'w') player.jump();
+      });
+      window.addEventListener('keyup', (e) => {
+        keys[e.key] = false;
+      });
+
+      generateLevel(level);
+      gameLoop();
     }
-
-    window.addEventListener('keydown', (e) => {
-      keys[e.key] = true;
-      if (e.key === 'ArrowUp' || e.key === 'w') player.jump();
-    });
-    window.addEventListener('keyup', (e) => {
-      keys[e.key] = false;
-    });
-
-    gameLoop();
   </script>
 </body>
 </html>
